@@ -654,3 +654,23 @@ procdump(void)
     printf("\n");
   }
 }
+
+// return the number of processes that currently exist
+// in the system
+int
+sys_howmanycmpt(void)
+{
+  int pid_count;
+  struct proc *p;
+  
+  acquire(&pid_lock);
+  printf("\n");
+  for (p = proc; p < &proc[NPROC]; p++){
+      if (p->name == "cmpt"){
+        pid_count++;
+      }    
+  }
+  release(&pid_lock);
+
+  return pid_count;
+}
