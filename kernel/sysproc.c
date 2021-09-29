@@ -96,12 +96,3 @@ sys_uptime(void)
   return xticks;
 }
 
-// return the number of processes that currently exist
-// in the system
-uint64
-sys_howmanycmpt(void)
-{
-  int pid;
-  struct p;
-
-}
