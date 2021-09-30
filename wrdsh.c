@@ -5,37 +5,45 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
+#define MAX_SIZE 256
+
 int main(int argc, char* argv[]){
-    char cmd[256];
-    char* path= "/bin/";
+    char *toks[MAX_SIZE];
+    char cmd[MAX_SIZE];
+    // char* path= "/bin/";
     int i;
-    char filePath[50];
+    // char filePath[50];
     
-    while(1){    
-        i = 0;
+    while(1){
+
+        // Prompt and get the command
         printf("wrdsh>");
         fgets(cmd, 256, stdin);
-        // printf(cmd);
+        // printf("Arguments given: %s", cmd);
         cmd[strlen(cmd) - 1] = 0;
-        
-        char* tok = strtok(cmd, " ");
-        while(tok != NULL){
-            argv[i] = tok;
-            i++;
-            tok = strtok(NULL, " ");
+
+        if (strcmp("", cmd) == 0 ){
+            continue;
         }
         
         if (strcmp ("exit", cmd) == 0){
             break;
         }
-        if (strcmp ("", cmd) == 0){
+
+        // Convert command into tokens
+        i = 0;
+        char* tok = strtok(cmd, " ");
+        while(tok != NULL){
+            toks[i] = tok;
+            i++;
+            tok = strtok(NULL, " ");
+        }
+        toks[i] = NULL;
+
+        if (i == 0){
             continue;
         }
         
-        argv[i] = NULL;
-        
-        strcpy(filePath, path);
-        strcat(filePath, argv[0]);
         
         pid_t pid = fork();
         
@@ -44,11 +52,12 @@ int main(int argc, char* argv[]){
                 exit(1);
             }
             else if(pid == 0 ){
-                execvp(argv[0], argv);
+                execvp(toks[0], toks);
+                printf("wrdsh: %s: %s\n", toks[0], toks);
             }
             else {
                 wait(NULL);
-                printf("Child Exited\n");
+                // printf("Child Exited\n");
             }
     }
     return 0;
