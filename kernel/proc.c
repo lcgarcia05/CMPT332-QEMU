@@ -666,7 +666,7 @@ sys_howmanycmpt(void)
   acquire(&pid_lock);
   printf("\n");
   for (p = proc; p < &proc[NPROC]; p++){
-      if (p->name == "cmpt"){
+      if (strncmpt("cmpt", p->name) == 0 ){
         pid_count++;
       }    
   }
