@@ -15,3 +15,6 @@ mkfs
 kernel/kernel
 user/usys.S
 .gdbinit
+.nfs000000000162007d00004206
+wrdsh
+.vscode
