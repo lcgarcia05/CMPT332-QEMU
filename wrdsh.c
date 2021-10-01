@@ -60,7 +60,9 @@ int main(int argc, char* argv[]){
         }
         index--;
 
-        if (!argc <= 1){
+        // If the given args is not a single command
+        // This is where the hardcoded parts are
+        if (i > 2){
             for (j=index-1; j>=0; j--){
                 newcmd[j] = toks[j];
             }
@@ -75,18 +77,22 @@ int main(int argc, char* argv[]){
         toks[i] = NULL;
         newcmd[i] = NULL;
 
-
+        // Create pipe
         if (pipe(fd) == -1){
             return 1;
         }
         
+        // Fork
         pid_t pid = fork();
         
+        // Fork error checking
         if (pid < 0){
             printf("Failed to create a child.");
-                xit(EXIT_FAILURE);
+            exit(EXIT_FAILURE);
         }
+        // Child process
         else if(pid == 0 ){
+            // If user wants to redirect stdout
             if (redirOUT){
                 close(fd[0]);
                 redirOUT = 0;
@@ -98,6 +104,7 @@ int main(int argc, char* argv[]){
                     close(fd[1]);
                     toks[redirOUT] = NULL;
                 }
+                // If user wants to redirect stdin
                 else if (redirIN){
                     redirIN = 0;
                     if ((fd[0] = open(toks[redirIN], O_RDONLY, 0)) == -1){
@@ -110,12 +117,13 @@ int main(int argc, char* argv[]){
                     toks[redirIN] = NULL;
                 }
 
-
+                // If given args is more than 2, which means that we are redirecting so use newcmd for the complete commands
                 if (i > 2){
                     execvp(newcmd[0], newcmd);
                     printf("wrdsh: %s: command not found\n", newcmd[0]);
                     exit(1);
                 }
+                // If only 1 argument
                 else{
                     execvp(toks[0], toks);
                     printf("wrdsh: %s: command not found\n", toks[0]);
