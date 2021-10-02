@@ -658,7 +658,7 @@ procdump(void)
 // return the number of processes that currently exist
 // in the system
 int
-sys_howmanycmpt(void)
+howmanycmpt(void)
 {
   int pid_count;
   struct proc *p;
