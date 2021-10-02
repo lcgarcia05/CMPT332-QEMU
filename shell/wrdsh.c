@@ -12,9 +12,9 @@
 int main(int argc, char* argv[]){
     char *toks[MAX_SIZE];
     char cmd[MAX_SIZE];
-    char *rcmd[MAX_SIZE];
+    // char *rcmd[MAX_SIZE];
     char *newcmd[MAX_SIZE];
-    int i, redirIN, redirOUT, index,j;
+    int i, redirIN, redirOUT, index,j, pipeOP,x;
     int fd[2];
 
     while(1){
@@ -36,13 +36,14 @@ int main(int argc, char* argv[]){
 
         // Convert command into tokens
         redirIN = 0;
+        pipeOP = 0;
         redirOUT = 0;
         index = 0;
         i = 0;
         j=0;
+        x=0;
         char *tok = strtok(cmd, " ");
-        rcmd[index] = tok;
-        index++;
+        // rcmd[index] = tok;
         while(tok != NULL){
             toks[i] = tok;
 
@@ -54,17 +55,21 @@ int main(int argc, char* argv[]){
                 redirOUT = i;
                 i--;
             }
+            else if (strcmp("|", tok) == 0){
+                pipeOP = 1;
+                i--;
+            }
             i++;
             tok = strtok(NULL, " ");
             index++;
         }
         index--;
-
+        x = strlen(toks);
         // If the given args is not a single command
         // This is where the hardcoded parts are
         if (i > 2){
-            for (j=index-1; j>=0; j--){
-                newcmd[j] = toks[j];
+            for (j=index-1;j>=0; j--){
+                newcmd[x--] = toks[j];
             }
 
             char *temp = newcmd[1];
@@ -83,15 +88,15 @@ int main(int argc, char* argv[]){
         }
         
         // Fork
-        pid_t pid = fork();
+        pid_t pid1 = fork();
         
         // Fork error checking
-        if (pid < 0){
+        if (pid1 < 0){
             printf("Failed to create a child.");
             exit(EXIT_FAILURE);
         }
         // Child process
-        else if(pid == 0 ){
+        else if(pid1 == 0 ){
             // If user wants to redirect stdout
             if (redirOUT){
                 close(fd[0]);
@@ -116,6 +121,14 @@ int main(int argc, char* argv[]){
                     close(fd[0]);
                     toks[redirIN] = NULL;
                 }
+                if (pipeOP){
+                    dup2(fd[0], STDIN_FILENO);
+                    close(fd[0]);
+                    close(fd[1]);
+                    execvp(newcmd[1], newcmd);
+                    printf("wrdsh: %s: command not found\n", newcmd[0]);
+                    exit(1);
+                }
 
                 // If given args is more than 2, which means that we are redirecting so use newcmd for the complete commands
                 if (i > 2){
@@ -130,11 +143,12 @@ int main(int argc, char* argv[]){
                     exit(1);
                 }
             }
-            else {
-                wait(NULL);
-                // printf("Child Exited\n");
+            // else {
+            //     wait(NULL);
+            //     // printf("Child Exited\n");
                 
-            }
+            // }
+    waitpid(pid1, NULL, 0);
     }
     return 0;
 }

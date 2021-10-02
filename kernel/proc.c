@@ -660,13 +660,13 @@ procdump(void)
 int
 sys_howmanycmpt(void)
 {
-  int pid_count;
+  int pid_count=0;
   struct proc *p;
   
   acquire(&pid_lock);
   printf("\n");
   for (p = proc; p < &proc[NPROC]; p++){
-      if (strncmpt("cmpt", p->name) == 0 ){
+      if (strncmp("cmpt", p->name, 1024) == 0 ){
         pid_count++;
       }    
   }
