@@ -141,6 +141,12 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // Initialize new fields: created, ended, running
+  acquire(&tickslock);
+  p->created = ticks;
+  release(&tickslock);
+  p->ended = 0;
+  p->running = 0;
   return p;
 }
 
@@ -407,6 +413,7 @@ wait(uint64 addr)
             release(&wait_lock);
             return -1;
           }
+          
           freeproc(np);
           release(&np->lock);
           release(&wait_lock);
