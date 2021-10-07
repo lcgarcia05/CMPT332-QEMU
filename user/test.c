@@ -1,7 +1,22 @@
-#include "kernel/types.h"
-#include "user/user.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <string.h>
+#include <unistd.h>
+#include <kernel/proc.h>
+
+
 
 int main(int argc, char *argv[]) {
-	printf("Number of cmpt procs in system: %d", sys_howmanycmpt());
-	exit(0);
+	for(int i = 0; i<15; i++){
+        pidt pid = fork();
+        if (pid == 0) {
+            printf(strcat("Processing P's child number ", i));
+        }
+        else{
+            waitstat();
+            exit(0);
+        }
+    }
+    exit(0);
 }
