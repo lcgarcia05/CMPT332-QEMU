@@ -95,3 +95,22 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// A2Q1
+// waitx syscall
+uint64
+sys_waitstat(void){
+  uint64 p;
+  uint64 *wtime, *rtime;
+
+  if (argaddr(0,(void*)&wtime) < 0 || argaddr(1, (void*)&rtime) < 0){
+    return -1;
+  }
+
+  if (argaddr(0, &p) < 0){
+    return -1;
+  }
+
+  return waitstat(p,wtime, rtime);
+
+}

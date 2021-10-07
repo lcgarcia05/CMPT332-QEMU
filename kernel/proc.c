@@ -141,12 +141,13 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // A2Q1
   // Initialize new fields: created, ended, running
   acquire(&tickslock);
   p->created = ticks;
-  release(&tickslock);
   p->ended = 0;
   p->running = 0;
+  release(&tickslock);
   return p;
 }
 
@@ -364,6 +365,12 @@ exit(int status)
   end_op();
   p->cwd = 0;
 
+  // A2Q1
+  // Add ticks to ended
+  acquire(&tickslock);
+  proc->ended = ticks;
+  release(&tickslock);
+
   acquire(&wait_lock);
 
   // Give any children to init.
@@ -433,6 +440,61 @@ wait(uint64 addr)
     sleep(p, &wait_lock);  //DOC: wait-sleep
   }
 }
+
+// A2Q1
+// Extended version of wait
+int
+waitstat(uint64 addr, uint64* wtime, uint64* rtime)
+{
+  struct proc *np;
+  int havekids, pid;
+  struct proc *p = myproc();
+
+  acquire(&wait_lock);
+
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(np = proc; np < &proc[NPROC]; np++){
+      if(np->parent == p){
+        // make sure the child isn't still in exit() or swtch().
+        acquire(&np->lock);
+
+        havekids = 1;
+        if(np->state == ZOMBIE){
+          // Found one.
+          pid = np->pid;
+          if(addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
+                                  sizeof(np->xstate)) < 0) {
+            release(&np->lock);
+            release(&wait_lock);
+            return -1;
+          }
+          
+          freeproc(np);
+          release(&np->lock);
+          release(&wait_lock);
+          return pid;
+        }
+        release(&np->lock);
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || p->killed){
+      release(&wait_lock);
+      return -1;
+    }
+    
+    // Changes
+    *wtime = np->ended - np->created;
+    *rtime = np->running;
+    
+    // Wait for a child to exit.
+    sleep(p, &wait_lock);  //DOC: wait-sleep
+  }
+}
+
 
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
