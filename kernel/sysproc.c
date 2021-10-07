@@ -96,9 +96,3 @@ sys_uptime(void)
   return xticks;
 }
 
-uint64
-sys_howmanycmpt(void)
-{
-  return howmanycmpt();
-}
-
