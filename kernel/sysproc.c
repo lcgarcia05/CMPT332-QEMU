@@ -97,11 +97,12 @@ sys_uptime(void)
 }
 
 // A2Q1
-// waitx syscall
+// waitstat syscall
 uint64
 sys_waitstat(void){
   uint64 p;
-  uint64 *wtime, *rtime;
+  uint64 *wtime;
+  uint64 *rtime;
 
   if (argaddr(0,(void*)&wtime) < 0 || argaddr(1, (void*)&rtime) < 0){
     return -1;

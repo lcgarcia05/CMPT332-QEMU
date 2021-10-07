@@ -145,9 +145,10 @@ found:
   // Initialize new fields: created, ended, running
   acquire(&tickslock);
   p->created = ticks;
+  release(&tickslock);
   p->ended = 0;
   p->running = 0;
-  release(&tickslock);
+
   return p;
 }
 
@@ -368,7 +369,7 @@ exit(int status)
   // A2Q1
   // Add ticks to ended
   acquire(&tickslock);
-  proc->ended = ticks;
+  p->ended = ticks;
   release(&tickslock);
 
   acquire(&wait_lock);
@@ -460,35 +461,40 @@ waitstat(uint64 addr, uint64* wtime, uint64* rtime)
         // make sure the child isn't still in exit() or swtch().
         acquire(&np->lock);
 
+
         havekids = 1;
         if(np->state == ZOMBIE){
           // Found one.
           pid = np->pid;
+
           if(addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
                                   sizeof(np->xstate)) < 0) {
             release(&np->lock);
             release(&wait_lock);
             return -1;
           }
-          
+
           freeproc(np);
           release(&np->lock);
           release(&wait_lock);
           return pid;
         }
+    
         release(&np->lock);
       }
     }
+
+    // wait(0);
+    // Changes
+
+    *wtime = np->ended - np->created;
+    // *rtime = np->running;
 
     // No point waiting if we don't have any children.
     if(!havekids || p->killed){
       release(&wait_lock);
       return -1;
     }
-    
-    // Changes
-    *wtime = np->ended - np->created;
-    *rtime = np->running;
     
     // Wait for a child to exit.
     sleep(p, &wait_lock);  //DOC: wait-sleep
