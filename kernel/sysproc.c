@@ -104,12 +104,12 @@ sys_waitstat(void){
   uint64 *wtime;
   uint64 *rtime;
 
-  if (argaddr(0,(void*)&wtime) < 0 || argaddr(1, (void*)&rtime) < 0){
-    return -1;
+  if (argaddr(0,(uint64*)&wtime) < 0 || argaddr(1, (uint64*)&rtime) < 0){
+    return 12;
   }
 
   if (argaddr(0, &p) < 0){
-    return -1;
+    return 13;
   }
 
   return waitstat(p,wtime, rtime);

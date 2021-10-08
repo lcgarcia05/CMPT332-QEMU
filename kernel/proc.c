@@ -366,11 +366,6 @@ exit(int status)
   end_op();
   p->cwd = 0;
 
-  // A2Q1
-  // Add ticks to ended
-  acquire(&tickslock);
-  p->ended = ticks;
-  release(&tickslock);
 
   acquire(&wait_lock);
 
@@ -384,6 +379,12 @@ exit(int status)
 
   p->xstate = status;
   p->state = ZOMBIE;
+
+  // A2Q1
+  // Add ticks to ended
+  acquire(&tickslock);
+  p->ended = ticks;
+  release(&tickslock);
 
   release(&wait_lock);
 
@@ -450,6 +451,7 @@ waitstat(uint64 addr, uint64* wtime, uint64* rtime)
   struct proc *np;
   int havekids, pid;
   struct proc *p = myproc();
+  uint64 r, w;
 
   acquire(&wait_lock);
 
@@ -461,18 +463,23 @@ waitstat(uint64 addr, uint64* wtime, uint64* rtime)
         // make sure the child isn't still in exit() or swtch().
         acquire(&np->lock);
 
-
         havekids = 1;
         if(np->state == ZOMBIE){
           // Found one.
           pid = np->pid;
-
           if(addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
                                   sizeof(np->xstate)) < 0) {
             release(&np->lock);
             release(&wait_lock);
             return -1;
           }
+
+          // Compute turnaround time and running time
+          w = np->ended - np->created;
+          r = np->running;
+          wtime = &w;
+          rtime = &r;
+
 
           freeproc(np);
           release(&np->lock);
@@ -487,8 +494,7 @@ waitstat(uint64 addr, uint64* wtime, uint64* rtime)
     // wait(0);
     // Changes
 
-    *wtime = np->ended - np->created;
-    // *rtime = np->running;
+
 
     // No point waiting if we don't have any children.
     if(!havekids || p->killed){

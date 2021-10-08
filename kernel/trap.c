@@ -50,6 +50,12 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
 
+  // A2Q1
+  // Incrementer for the running field
+  if (p->state == RUNNING){
+    p->running = p->running + 1;
+  }
+  
 
   if(r_scause() == 8){
     // system call
@@ -91,13 +97,6 @@ void
 usertrapret(void)
 {
   struct proc *p = myproc();
-
-  // A2Q1
-  // Incrementer for the running field
-  if (p != 0){
-    p->running = p->running + 1;
-  }
-  
 
   // we're about to switch the destination of traps from
   // kerneltrap() to usertrap(), so turn off interrupts until
