@@ -101,16 +101,21 @@ sys_uptime(void)
 uint64
 sys_waitstat(void){
   uint64 p;
-  uint64 *wtime;
-  uint64 *rtime;
-
-  if (argaddr(0,(uint64*)&wtime) < 0 || argaddr(1, (uint64*)&rtime) < 0){
-    return 12;
-  }
+  uint64 wtime;
+  uint64 rtime;
 
   if (argaddr(0, &p) < 0){
-    return 13;
+    return -1;
   }
+
+  if (argaddr(1,&wtime) < 0){
+    return -1;
+  }
+
+  if (argaddr(2, &rtime)< 0){
+    return -1;
+  }
+
 
   return waitstat(p,wtime, rtime);
 

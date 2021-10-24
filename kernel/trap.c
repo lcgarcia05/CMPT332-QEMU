@@ -50,13 +50,6 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
 
-  // A2Q1
-  // Incrementer for the running field
-  if (p->state == RUNNING){
-    p->running = p->running + 1;
-  }
-  
-
   if(r_scause() == 8){
     // system call
 

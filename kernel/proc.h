@@ -106,7 +106,12 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  uint64 created;              // 
-  uint64 ended;
-  uint64 running;
+  uint created;                 // A2Q1 changes
+  uint ended;
+  uint running;
+  struct proc *nextproc;        // A2Q2 changes
+  struct proc *prevproc;
+  int priority;
+  int t_med_run;
+
 };

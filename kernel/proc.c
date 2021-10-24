@@ -9,6 +9,16 @@
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
+struct proc *highhead;
+struct proc *medhead;
+struct proc *lowhead;
+struct proc *hightail;
+struct proc *medtail;
+struct proc *lowtail;
+int time_since_moveup;
+
+void addToList(struct proc*);
+void moveup_proc(void);
 
 struct proc *initproc;
 
@@ -54,6 +64,13 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
   }
+  highhead = 0;
+  medhead = 0;
+  lowhead = 0;
+  hightail = 0;
+  medtail = 0;
+  lowtail = 0;
+  time_since_moveup = 0;
 }
 
 // Must be called with interrupts disabled,
@@ -118,6 +135,7 @@ allocproc(void)
 
 found:
   p->pid = allocpid();
+  p->priority = HIGH;           // Set new process as HIGH
   p->state = USED;
 
   // Allocate a trapframe page.
@@ -143,11 +161,9 @@ found:
 
   // A2Q1
   // Initialize new fields: created, ended, running
-  acquire(&tickslock);
-  p->created = ticks;
-  release(&tickslock);
-  p->ended = 0;
-  p->running = 0;
+
+  // p->ended = 0;
+  // p->running = 0;
 
   return p;
 }
@@ -251,6 +267,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  addToList(p);
 
   release(&p->lock);
 }
@@ -283,11 +300,22 @@ fork(void)
   int i, pid;
   struct proc *np;
   struct proc *p = myproc();
-
+  
   // Allocate process.
   if((np = allocproc()) == 0){
     return -1;
   }
+
+  p->state = RUNNABLE;
+  p->priority = HIGH;
+  p->t_med_run = 0;
+  addToList(p);
+
+  uint xticks;
+  acquire(&tickslock);
+  xticks = ticks;
+  release(&tickslock);
+  p->created = xticks;
 
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
@@ -321,7 +349,10 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+
   release(&np->lock);
+
+
 
   return pid;
 }
@@ -349,6 +380,7 @@ exit(int status)
 {
   struct proc *p = myproc();
 
+
   if(p == initproc)
     panic("init exiting");
 
@@ -359,11 +391,15 @@ exit(int status)
       fileclose(f);
       p->ofile[fd] = 0;
     }
+
   }
+
 
   begin_op();
   iput(p->cwd);
+
   end_op();
+
   p->cwd = 0;
 
 
@@ -380,16 +416,17 @@ exit(int status)
   p->xstate = status;
   p->state = ZOMBIE;
 
-  // A2Q1
-  // Add ticks to ended
-  acquire(&tickslock);
-  p->ended = ticks;
-  release(&tickslock);
-
   release(&wait_lock);
 
+
+  uint xticks;
+  acquire(&tickslock);
+  xticks = ticks;
+  p->ended = xticks;
+  release(&tickslock);
   // Jump into the scheduler, never to return.
   sched();
+
   panic("zombie exit");
 }
 
@@ -446,12 +483,12 @@ wait(uint64 addr)
 // A2Q1
 // Extended version of wait
 int
-waitstat(uint64 addr, uint64* wtime, uint64* rtime)
+waitstat(uint64 addr, uint64 wtime, uint64 rtime)
 {
   struct proc *np;
   int havekids, pid;
   struct proc *p = myproc();
-  uint64 r, w;
+  uint r, w;
 
   acquire(&wait_lock);
 
@@ -462,7 +499,6 @@ waitstat(uint64 addr, uint64* wtime, uint64* rtime)
       if(np->parent == p){
         // make sure the child isn't still in exit() or swtch().
         acquire(&np->lock);
-
         havekids = 1;
         if(np->state == ZOMBIE){
           // Found one.
@@ -473,41 +509,38 @@ waitstat(uint64 addr, uint64* wtime, uint64* rtime)
             release(&wait_lock);
             return -1;
           }
-
-          // Compute turnaround time and running time
-          w = np->ended - np->created;
-          r = np->running;
-          wtime = &w;
-          rtime = &r;
-
-
           freeproc(np);
           release(&np->lock);
+
           release(&wait_lock);
           return pid;
         }
     
         release(&np->lock);
       }
+
+      // Compute turnaround time and running time
+      w = p->ended - p->created;
+      // Reversed it because the result keeps giving negative numbers
+      // w = p->created - p->ended;
+      r = p -> running;
+      copyout(p->pagetable, wtime, (char *) &w, sizeof(w));
+      copyout(p->pagetable, rtime, (char *) &r, sizeof(r));
     }
-
-    // wait(0);
-    // Changes
-
-
 
     // No point waiting if we don't have any children.
     if(!havekids || p->killed){
       release(&wait_lock);
       return -1;
     }
-    
+
     // Wait for a child to exit.
     sleep(p, &wait_lock);  //DOC: wait-sleep
   }
 }
 
 
+// Original Scheduler
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -515,12 +548,48 @@ waitstat(uint64 addr, uint64* wtime, uint64* rtime)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+// void
+// scheduler(void)
+// {
+//   struct proc *p;
+//   struct cpu *c = mycpu();
+
+//   c->proc = 0;
+//   for(;;){
+//     // Avoid deadlock by ensuring that devices can interrupt.
+//     intr_on();
+
+//     for(p = proc; p < &proc[NPROC]; p++) {
+//       acquire(&p->lock);
+//       if(p->state == RUNNABLE) {
+//         // Switch to chosen process.  It is the process's job
+//         // to release its lock and then reacquire it
+//         // before jumping back to us.
+//         p->state = RUNNING;
+//         c->proc = p;
+//         swtch(&c->context, &p->context);
+        
+        
+//         // A2Q1
+//         p->running = p->running + 1;
+
+//         // Process is done running for now.
+//         // It should have changed its p->state before coming back.
+//         c->proc = 0;
+//       }
+//       release(&p->lock);
+//     }
+//   }
+// }
+
+//A2Q2 MLFQ
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-  
+  int procfound;
+
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
@@ -529,16 +598,38 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+        if(highhead != 0){
+          p = highhead;
+          highhead = highhead->nextproc;
+          procfound = 1;
+        }
+        else if(medhead != 0){
+          p = medhead;
+          medhead = medhead->nextproc;
+          procfound = 1;
+        }
+        else if(lowhead != 0){
+          p = lowhead;
+          lowhead = lowhead->nextproc;
+          procfound = 1;
+        }
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+        if (procfound == 1){
+          // Switch to chosen process.  It is the process's job
+          // to release its lock and then reacquire it
+          // before jumping back to us.
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
+
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+          time_since_moveup = time_since_moveup + 1;
+          if (moveup == time_since_moveup){
+            moveup_proc();
+          }
+        }
       }
       release(&p->lock);
     }
@@ -579,6 +670,7 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  addToList(p);
   sched();
   release(&p->lock);
 }
@@ -647,6 +739,7 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        addToList(p);
       }
       release(&p->lock);
     }
@@ -668,6 +761,7 @@ kill(int pid)
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
+        addToList(p);
       }
       release(&p->lock);
       return 0;
@@ -734,4 +828,79 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// A2Q2 function that puts the process to its appropriate priority
+void addToList(struct proc *p){
+  
+  // HIGH priority
+  if (p->priority == HIGH){
+    if (highhead == 0){
+      hightail = p;
+      highhead = p;
+    }else {
+      hightail->nextproc = p;
+      p->nextproc = hightail;
+      hightail = p;
+    }
+    p->priority = MEDIUM;
+    p->t_med_run = 0;
+    hightail->nextproc = 0;
+  }
+
+  // Medium priority
+  else if(p->priority == MEDIUM){
+    if (p->t_med_run == mtimes){
+      p->priority = LOW;
+    }else{
+      if (medhead == 0){
+        medtail = p;
+        medhead = p;
+      }else{
+        medtail->nextproc = p;
+        p->prevproc = medtail;
+        medtail = p;
+      }
+      p->t_med_run = p->t_med_run + 1;
+      medtail -> nextproc = 0;
+    }
+
+  // Low priority
+    if (p->priority == LOW){
+      if (lowhead == 0){
+        lowtail = p;
+        lowhead = p;
+      }else{
+        lowtail -> nextproc = p;
+        p->prevproc = lowtail;
+        lowtail = p;
+      }
+      lowtail -> nextproc = 0;
+    }
+  }
+}
+
+// Function that moves all priority into high priority list
+void moveup_proc(void){
+  struct proc *temp;
+
+  while (medhead != 0){
+    temp = medhead -> nextproc;
+    medhead -> priority = HIGH;
+    addToList(medhead);
+    medhead = temp;
+  }
+
+  // clear the head
+  medhead = 0;
+
+  while (lowhead != 0){
+    temp = lowhead -> nextproc;
+    lowhead->priority = HIGH;
+    addToList(lowhead);
+    lowhead = temp;
+  }
+
+  // clear the head
+  lowhead = 0;
 }
